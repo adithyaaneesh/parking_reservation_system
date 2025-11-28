@@ -166,6 +166,13 @@ def all_parkingSlot(request):
     return Response(serializer.data)
 
 # view all available parking slot 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def available_parkingSlot(request):
+    available_parkingslot = ParkingSlot.objects.filter(status='available')
+    serializer = ParkingSlotSerializer(available_parkingslot, many=True)
+    return Response(serializer.data)
+
 
 # reserve a parkingslot for a specific time range
 @api_view(['POST'])
@@ -199,9 +206,27 @@ def reserve_parkingslot(request):
         return Response(serializer.data)
     return Response(serializer.errors)
 
-    
-
-
 # cancel reservation
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def cancel_reservation(request):
+    user = request.user
+    reservation_id = request.data.get("reservation_id")
+
+    if not reservation_id:
+        return Response({"error": "reservation_id is required."})
+    
+    try:
+        reservation = Reservation.objects.get(id=reservation_id, user=user)
+    except Reservation.DoesNotExist:
+        return Response({"error": "Reservation not found."})
+    
+    if reservation.status != "active":
+        return Response({"error": "Only active reservations can be cancelled."})
+    reservation.status = "cancelled"
+    reservation.save()
+
+    return Response({"success": f"Reservation {reservation_id} cancelled successfully."})
+
 # pay for reservation
 # get a QR code ticket

@@ -23,9 +23,10 @@ urlpatterns = [
     # user urls
     path("api/all_parkinglot/", views.all_parkinglot, name='all_parkinglot'),
     path("api/all_parkingslot/", views.all_parkingSlot, name='all_parkingslot'),
+    path("api/available_parkingslot/", views.available_parkingSlot, name='available_parkingslot'),
     path("api/reserve_parkingslot/", views.reserve_parkingslot, name='reserve_parkingslot'),
+    path("api/cancel_reservation/", views.cancel_reservation, name='cancel_reservation'),
 
-    
 
 ]
 

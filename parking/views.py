@@ -76,6 +76,7 @@ def user_login(request):
 
 # admin add parkinglot 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def add_parkingLot(request):
     is_many = isinstance(request.data,list)
     serializer = ParkingLotSerializer(data = request.data, many = is_many)
@@ -86,6 +87,7 @@ def add_parkingLot(request):
 
 # admin update parkinglot
 @api_view(['PUT', 'PATCH'])
+@permission_classes([IsAuthenticated])
 def update_parkinglot(request,id):
     parkinglot = get_object_or_404(ParkingLot,id=id)
 
@@ -99,6 +101,7 @@ def update_parkinglot(request,id):
 
 # admin delete parkinglot
 @api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
 def delete_parkinglot(request, id):
     Parkinglot = get_object_or_404(ParkingLot,id=id)
     Parkinglot.delete()
@@ -107,6 +110,7 @@ def delete_parkinglot(request, id):
 
 #admin add parkingSlot
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def add_parkingSlot(request):
     is_many = isinstance(request.data, list)
     serializer = ParkingSlotSerializer(data = request.data, many = is_many)
@@ -117,6 +121,7 @@ def add_parkingSlot(request):
 
 # admin update parkingSlot
 @api_view(['PUT' , 'PATCH'])
+@permission_classes([IsAuthenticated])
 def update_parking_slot(request, id):
     parkingslot = get_object_or_404(ParkingSlot, id=id)
     partial_update = True if request.method == 'PATCH' else False
@@ -129,6 +134,7 @@ def update_parking_slot(request, id):
 
 # admin view all users
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def view_all_users(request):
     users = User.objects.all()
     serializer = UserSerializer(users, many=True)
@@ -136,6 +142,7 @@ def view_all_users(request):
 
 # admin view all reservations
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def view_all_reservations(request):
     reservations = Reservation.objects.all()
     serializer = ReservationSerializer(reservations, many =True)
@@ -144,6 +151,7 @@ def view_all_reservations(request):
 
 # view all parkingLot 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def all_parkinglot(request):
     parkinglot = ParkingLot.objects.all()
     serializer = ParkingLotSerializer(parkinglot, many =True)
@@ -151,6 +159,7 @@ def all_parkinglot(request):
 
 # view all  parkingSlot
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def all_parkingSlot(request):
     parkingslot = ParkingSlot.objects.all()
     serializer = ParkingSlotSerializer(parkingslot, many=True)

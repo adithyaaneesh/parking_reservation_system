@@ -13,14 +13,13 @@ from django.conf import settings
 import qrcode
 import io
 from django.http import HttpResponse
-# Create your views here.
+
+User = get_user_model()
 
 class ProfileCreateView(generics.CreateAPIView):
     queryset = Profile.objects.all()
     serializer_class = ProfileSerializer
 
-
-User = get_user_model()
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -74,91 +73,100 @@ def user_login(request):
         }
     })
 
+def is_admin(user):
+    return user.is_staff or user.is_superuser
 
-# admin add parkinglot 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def add_parkingLot(request):
-    is_many = isinstance(request.data,list)
-    serializer = ParkingLotSerializer(data = request.data, many = is_many)
+    if not is_admin(request.user):
+        return Response({"error": "Not authorized"}, status=403)
+
+    is_many = isinstance(request.data, list)
+    serializer = ParkingLotSerializer(data=request.data, many=is_many)
     if serializer.is_valid():
         serializer.save()
         return Response(serializer.data)
     return Response(serializer.errors)
 
-# admin update parkinglot
 @api_view(['PUT', 'PATCH'])
 @permission_classes([IsAuthenticated])
-def update_parkinglot(request,id):
-    parkinglot = get_object_or_404(ParkingLot,id=id)
+def update_parkinglot(request, id):
+    if not is_admin(request.user):
+        return Response({"error": "Not authorized"}, status=403)
 
-    partial_update = True if request.method  == 'PATCH' else False
-
-    serializer = ParkingLotSerializer(instance = parkinglot,data = request.data,partial = partial_update )
+    parkinglot = get_object_or_404(ParkingLot, id=id)
+    partial_update = request.method == 'PATCH'
+    serializer = ParkingLotSerializer(instance=parkinglot, data=request.data, partial=partial_update)
     if serializer.is_valid():
         serializer.save()
         return Response(serializer.data)
     return Response(serializer.errors)
 
-# admin delete parkinglot
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
 def delete_parkinglot(request, id):
-    Parkinglot = get_object_or_404(ParkingLot,id=id)
-    Parkinglot.delete()
-    return Response({"message":"ParkingLot deleted successfully!!!"})
+    if not is_admin(request.user):
+        return Response({"error": "Not authorized"}, status=403)
 
+    parkinglot = get_object_or_404(ParkingLot, id=id)
+    parkinglot.delete()
+    return Response({"message": "ParkingLot deleted successfully!!!"})
 
-#admin add parkingSlot
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def add_parkingSlot(request):
+    if not is_admin(request.user):
+        return Response({"error": "Not authorized"}, status=403)
+
     is_many = isinstance(request.data, list)
-    serializer = ParkingSlotSerializer(data = request.data, many = is_many)
+    serializer = ParkingSlotSerializer(data=request.data, many=is_many)
     if serializer.is_valid():
         serializer.save()
         return Response(serializer.data)
     return Response(serializer.errors)
 
-# admin update parkingSlot
-@api_view(['PUT' , 'PATCH'])
+@api_view(['PUT', 'PATCH'])
 @permission_classes([IsAuthenticated])
 def update_parking_slot(request, id):
+    if not is_admin(request.user):
+        return Response({"error": "Not authorized"}, status=403)
+
     parkingslot = get_object_or_404(ParkingSlot, id=id)
-    partial_update = True if request.method == 'PATCH' else False
-    
+    partial_update = request.method == 'PATCH'
     serializer = ParkingSlotSerializer(instance=parkingslot, data=request.data, partial=partial_update)
     if serializer.is_valid():
         serializer.save()
         return Response(serializer.data)
     return Response(serializer.errors)
 
-# admin view all users
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def view_all_users(request):
+    if not is_admin(request.user):
+        return Response({"error": "Not authorized"}, status=403)
+
     users = User.objects.all()
     serializer = UserSerializer(users, many=True)
     return Response(serializer.data)
 
-# admin view all reservations
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def view_all_reservations(request):
+    if not is_admin(request.user):
+        return Response({"error": "Not authorized"}, status=403)
+
     reservations = Reservation.objects.all()
-    serializer = ReservationSerializer(reservations, many =True)
+    serializer = ReservationSerializer(reservations, many=True)
     return Response(serializer.data)
 
-
-# view all parkingLot 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def all_parkinglot(request):
     parkinglot = ParkingLot.objects.all()
-    serializer = ParkingLotSerializer(parkinglot, many =True)
+    serializer = ParkingLotSerializer(parkinglot, many=True)
     return Response(serializer.data)
 
-# view all  parkingSlot
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def all_parkingSlot(request):
@@ -166,7 +174,6 @@ def all_parkingSlot(request):
     serializer = ParkingSlotSerializer(parkingslot, many=True)
     return Response(serializer.data)
 
-# view all available parking slot 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def available_parkingSlot(request):
@@ -174,40 +181,54 @@ def available_parkingSlot(request):
     serializer = ParkingSlotSerializer(available_parkingslot, many=True)
     return Response(serializer.data)
 
-
-# reserve a parkingslot for a specific time range
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def reserve_parkingslot(request):
     user = request.user
-    slot_id = request.data.get("slot_id")
-    start_time = request.data.get("start_time")
-    end_time = request.data.get("end_time")
+
+    data = request.data.copy()
+    data.pop("id", None)
+
+    slot_id = data.get("slot_id")
+    start_time = data.get("start_time")
+    end_time = data.get("end_time")
+    amount = data.get("amount", 100)
+
     if not slot_id or not start_time or not end_time:
-        return Response({"error":"slot_id, start_time and end_time are required."})
-    
+        return Response({"error": "slot_id, start_time and end_time are required."})
+
     try:
-        slot=ParkingSlot.objects.get(id=slot_id)
+        slot = ParkingSlot.objects.get(id=slot_id)
     except ParkingSlot.DoesNotExist:
         return Response({"error": "Parking slot not found."})
-    
+
     if slot.status != "available":
-        return Response({"error":"This slot is not available."})
+        return Response({"error": "This slot is not available."})
+
     overlapping = Reservation.objects.filter(
         slot=slot,
-        start_time__lt = end_time,
-        end_time__gt = start_time,
-        status = "active"
+        start_time__lt=end_time,
+        end_time__gt=start_time,
+        status="active"
     ).exists()
+
     if overlapping:
         return Response({"error": "Slot already reserved for this time range."})
-    serializer = ReservationSerializer(data = request.data)
+
+    data["slot_id"] = slot_id
+
+    serializer = ReservationSerializer(data=data)
     if serializer.is_valid():
-        serializer.save(user=user, slot=slot)
-        return Response(serializer.data)
+        reservation = serializer.save(user=user, amount=amount)
+
+        slot.status = "reserved"
+        slot.save()
+
+        return Response(ReservationSerializer(reservation).data)
+
     return Response(serializer.errors)
 
-# cancel reservation
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def cancel_reservation(request):
@@ -216,57 +237,53 @@ def cancel_reservation(request):
 
     if not reservation_id:
         return Response({"error": "reservation_id is required."})
-    
+
     try:
         reservation = Reservation.objects.get(id=reservation_id, user=user)
     except Reservation.DoesNotExist:
         return Response({"error": "Reservation not found."})
-    
+
     if reservation.status != "active":
         return Response({"error": "Only active reservations can be cancelled."})
+
     reservation.status = "cancelled"
     reservation.save()
 
+    slot = reservation.slot
+    slot.status = 'available'
+    slot.save()
+
     return Response({"success": f"Reservation {reservation_id} cancelled successfully."})
 
-# pay for reservation
 
-# Initialize Razorpay client
 razorpay_client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
-
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def pay_for_reservation(request):
-    """
-    Create a Razorpay payment order for a reservation and return order details.
-    """
     reservation_id = request.data.get('reservation_id')
-    
+
     if not reservation_id:
         return Response({"error": "reservation_id is required."}, status=400)
-    
+
     try:
         reservation = Reservation.objects.get(id=reservation_id, user=request.user)
     except Reservation.DoesNotExist:
         return Response({"error": "Reservation not found."}, status=404)
-    
+
     if reservation.payment_status == 'paid':
         return Response({"message": "Reservation already paid."})
-    
-    # Amount in paise (Razorpay works in smallest currency unit)
-    amount_in_paise = int(reservation.amount * 100)  # assuming reservation.amount is in INR
-    
-    # Create Razorpay order
+
+    amount_in_paise = int(reservation.amount * 100)
+
     razorpay_order = razorpay_client.order.create({
         "amount": amount_in_paise,
         "currency": "INR",
         "payment_capture": "1"
     })
-    
-    # Save the order id in reservation for future verification
+
     reservation.razorpay_order_id = razorpay_order['id']
     reservation.save()
-    
+
     return Response({
         "reservation_id": reservation.id,
         "razorpay_order_id": razorpay_order['id'],
@@ -275,29 +292,67 @@ def pay_for_reservation(request):
         "message": "Order created. Proceed with payment."
     })
 
-# get a QR code ticket
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def verify_payment(request):
+    razorpay_order_id = request.data.get("razorpay_order_id")
+    razorpay_payment_id = request.data.get("razorpay_payment_id")
+    razorpay_signature = request.data.get("razorpay_signature")
+
+    if not razorpay_order_id or not razorpay_payment_id or not razorpay_signature:
+        return Response({"error": "Missing payment details"}, status=400)
+
+    try:
+        reservation = Reservation.objects.get(
+            razorpay_order_id=razorpay_order_id,
+            user=request.user
+        )
+    except Reservation.DoesNotExist:
+        return Response({"error": "Reservation not found"}, status=404)
+
+    # Verify Razorpay signature
+    try:
+        razorpay_client.utility.verify_payment_signature({
+            "razorpay_order_id": razorpay_order_id,
+            "razorpay_payment_id": razorpay_payment_id,
+            "razorpay_signature": razorpay_signature
+        })
+    except:
+        reservation.payment_status = "failed"
+        reservation.save()
+        return Response({"error": "Payment verification failed"}, status=400)
+
+    # Payment success
+    reservation.payment_status = "paid"
+    reservation.status = "active" 
+    reservation.razorpay_payment_id = razorpay_payment_id
+    reservation.razorpay_signature = razorpay_signature
+    reservation.save()
+
+
+    return Response({"success": "Payment verified successfully!"})
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def reservation_qr_code(request, reservation_id):
-    """
-    Generate a QR code for a reservation containing reservation details.
-    """
     try:
         reservation = Reservation.objects.get(id=reservation_id, user=request.user)
     except Reservation.DoesNotExist:
         return Response({"error": "Reservation not found."}, status=404)
-    
-    # Data to encode in QR code
+
+    # Only generate QR after payment success
+    if reservation.payment_status != "paid":
+        return Response({"error": "QR Code available only after payment."}, status=403)
+
     qr_data = f"Reservation ID: {reservation.id}\n" \
               f"User: {reservation.user.username}\n" \
               f"Slot: {reservation.slot.slot_number}\n" \
               f"Start: {reservation.start_time}\n" \
               f"End: {reservation.end_time}\n" \
-              f"Status: {reservation.status}"
+              f"Status: {reservation.status}\n" \
+              f"Payment: {reservation.payment_status}"
 
-    # Generate QR code
     qr = qrcode.QRCode(
         version=1,
         error_correction=qrcode.constants.ERROR_CORRECT_L,
@@ -308,8 +363,6 @@ def reservation_qr_code(request, reservation_id):
     qr.make(fit=True)
 
     img = qr.make_image(fill_color="black", back_color="white")
-    
-    # Save image to memory
     buffer = io.BytesIO()
     img.save(buffer, "PNG")
     buffer.seek(0)

@@ -26,6 +26,7 @@ urlpatterns = [
     path("api/available_parkingslot/", views.available_parkingSlot, name='available_parkingslot'),
     path("api/reserve_parkingslot/", views.reserve_parkingslot, name='reserve_parkingslot'),
     path("api/cancel_reservation/", views.cancel_reservation, name='cancel_reservation'),
+    path("api/reservation/<int:reservation_id>/qr/", views.reservation_qr_code, name="reservation_qr"),
 
 
 ]

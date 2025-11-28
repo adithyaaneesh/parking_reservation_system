@@ -8,10 +8,11 @@ from django.contrib.auth import get_user_model
 from rest_framework.authtoken.models import Token
 from .serializers import (ParkingLotSerializer, ParkingSlotSerializer, ReservationSerializer, UserSerializer, ProfileSerializer)
 from .models import ParkingSlot, ParkingLot, Reservation, Profile
-
-
-
-
+import razorpay
+from django.conf import settings
+import qrcode
+import io
+from django.http import HttpResponse
 # Create your views here.
 
 class ProfileCreateView(generics.CreateAPIView):
@@ -229,4 +230,88 @@ def cancel_reservation(request):
     return Response({"success": f"Reservation {reservation_id} cancelled successfully."})
 
 # pay for reservation
+
+# Initialize Razorpay client
+razorpay_client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def pay_for_reservation(request):
+    """
+    Create a Razorpay payment order for a reservation and return order details.
+    """
+    reservation_id = request.data.get('reservation_id')
+    
+    if not reservation_id:
+        return Response({"error": "reservation_id is required."}, status=400)
+    
+    try:
+        reservation = Reservation.objects.get(id=reservation_id, user=request.user)
+    except Reservation.DoesNotExist:
+        return Response({"error": "Reservation not found."}, status=404)
+    
+    if reservation.payment_status == 'paid':
+        return Response({"message": "Reservation already paid."})
+    
+    # Amount in paise (Razorpay works in smallest currency unit)
+    amount_in_paise = int(reservation.amount * 100)  # assuming reservation.amount is in INR
+    
+    # Create Razorpay order
+    razorpay_order = razorpay_client.order.create({
+        "amount": amount_in_paise,
+        "currency": "INR",
+        "payment_capture": "1"
+    })
+    
+    # Save the order id in reservation for future verification
+    reservation.razorpay_order_id = razorpay_order['id']
+    reservation.save()
+    
+    return Response({
+        "reservation_id": reservation.id,
+        "razorpay_order_id": razorpay_order['id'],
+        "amount": reservation.amount,
+        "currency": "INR",
+        "message": "Order created. Proceed with payment."
+    })
+
 # get a QR code ticket
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def reservation_qr_code(request, reservation_id):
+    """
+    Generate a QR code for a reservation containing reservation details.
+    """
+    try:
+        reservation = Reservation.objects.get(id=reservation_id, user=request.user)
+    except Reservation.DoesNotExist:
+        return Response({"error": "Reservation not found."}, status=404)
+    
+    # Data to encode in QR code
+    qr_data = f"Reservation ID: {reservation.id}\n" \
+              f"User: {reservation.user.username}\n" \
+              f"Slot: {reservation.slot.slot_number}\n" \
+              f"Start: {reservation.start_time}\n" \
+              f"End: {reservation.end_time}\n" \
+              f"Status: {reservation.status}"
+
+    # Generate QR code
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(qr_data)
+    qr.make(fit=True)
+
+    img = qr.make_image(fill_color="black", back_color="white")
+    
+    # Save image to memory
+    buffer = io.BytesIO()
+    img.save(buffer, "PNG")
+    buffer.seek(0)
+
+    return HttpResponse(buffer, content_type="image/png")

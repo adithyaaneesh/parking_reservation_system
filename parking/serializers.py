@@ -37,24 +37,3 @@ class ReservationSerializer(serializers.ModelSerializer):
         read_only_fields = ['status', 'payment_status', 'qr_code']
 
 
-
-
-# def validate(self, data):
-# start = data.get('start_time')
-# end = data.get('end_time')
-# if start >= end:
-# raise serializers.ValidationError('end_time must be after start_time')
-# return data
-
-
-# def create(self, validated_data):
-# user = self.context['request'].user
-# slot = validated_data.pop('slot')
-# # check overlap
-# start = validated_data['start_time']
-# end = validated_data['end_time']
-# overlapping = Reservation.objects.filter(slot=slot, status='active').filter(
-# start_time__lt=end, end_time__gt=start
-# )
-# if overlapping.exists():
-# raise serializers.ValidationE

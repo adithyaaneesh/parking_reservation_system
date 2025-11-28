@@ -136,3 +136,7 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',
     ]
 }
+
+
+RAZORPAY_KEY_ID = 'rzp_test_Rl3ccDJoZIKC1y'
+RAZORPAY_KEY_SECRET = '681D2I8JNrLfR8BUuqIeY6Lf'

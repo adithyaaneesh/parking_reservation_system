@@ -70,16 +70,16 @@ class Reservation(models.Model):
         return f"Reservation {self.id} by {self.user}"
 
 
-# class Payment(models.Model):
-#     PROVIDERS = [
-#         ('razorpay', 'Razorpay'),
-#     ]
-#     reservation = models.ForeignKey(Reservation, related_name='payments', on_delete=models.CASCADE)
-#     amount = models.DecimalField(max_digits=10, decimal_places=2)
-#     provider = models.CharField(max_length=50, choices=PROVIDERS)
-#     transaction_id = models.CharField(max_length=255, blank=True, null=True)
-#     status = models.CharField(max_length=50, default='pending')
-#     created_at = models.DateTimeField(auto_now_add=True)
-# def __str__(self):
-#     return f"Payment {self.id} {self.status}"
+class Payment(models.Model):
+    PROVIDERS = [
+        ('razorpay', 'Razorpay'),
+    ]
+    reservation = models.ForeignKey(Reservation, related_name='payments', on_delete=models.CASCADE)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    provider = models.CharField(max_length=50, choices=PROVIDERS)
+    transaction_id = models.CharField(max_length=255, blank=True, null=True)
+    status = models.CharField(max_length=50, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+def __str__(self):
+    return f"Payment {self.id} {self.status}"
 

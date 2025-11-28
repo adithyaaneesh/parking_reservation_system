@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import ParkingLot, ParkingSlot, Reservation
+from .models import ParkingLot, ParkingSlot, Reservation, Profile
 
 User = get_user_model()
 
@@ -9,6 +9,11 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         # fields = ['id', 'username', 'email', 'is_staff']
         fields = ['id', 'username', 'email']
+
+class ProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Profile
+        fields = "__all__"
 
 class ParkingSlotSerializer(serializers.ModelSerializer):
     class Meta:

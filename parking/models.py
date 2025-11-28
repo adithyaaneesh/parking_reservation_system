@@ -1,5 +1,20 @@
 from django.conf import settings
 from django.db import models
+from PIL import Image
+
+
+class Profile(models.Model):
+    name = models.CharField(max_length=100)
+    photo = models.ImageField(upload_to="profile_images/")
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+
+        img = Image.open(self.photo.path)
+
+        if img.height > 800 or img.width > 800:
+            img.thumbnail((800, 800))
+            img.save(self.photo.path)
 
 # Create your models here.
 
@@ -48,7 +63,7 @@ class Reservation(models.Model):
     end_time = models.DateTimeField()
     status = models.CharField(max_length=20, choices=STATUS, default='active')
     payment_status = models.CharField(max_length=20, choices=PAYMENT, default='pending')
-    # qr_code = models.ImageField(null=True,blank=True)
+    qr_code = models.ImageField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

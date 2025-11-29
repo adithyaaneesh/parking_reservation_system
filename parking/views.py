@@ -73,8 +73,10 @@ def user_login(request):
         }
     })
 
+
 def is_admin(user):
     return user.is_staff or user.is_superuser
+
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -88,6 +90,7 @@ def add_parkingLot(request):
         serializer.save()
         return Response(serializer.data)
     return Response(serializer.errors)
+
 
 @api_view(['PUT', 'PATCH'])
 @permission_classes([IsAuthenticated])
@@ -103,6 +106,7 @@ def update_parkinglot(request, id):
         return Response(serializer.data)
     return Response(serializer.errors)
 
+
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
 def delete_parkinglot(request, id):
@@ -112,6 +116,7 @@ def delete_parkinglot(request, id):
     parkinglot = get_object_or_404(ParkingLot, id=id)
     parkinglot.delete()
     return Response({"message": "ParkingLot deleted successfully!!!"})
+
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -125,6 +130,7 @@ def add_parkingSlot(request):
         serializer.save()
         return Response(serializer.data)
     return Response(serializer.errors)
+
 
 @api_view(['PUT', 'PATCH'])
 @permission_classes([IsAuthenticated])
@@ -140,6 +146,7 @@ def update_parking_slot(request, id):
         return Response(serializer.data)
     return Response(serializer.errors)
 
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def view_all_users(request):
@@ -149,6 +156,7 @@ def view_all_users(request):
     users = User.objects.all()
     serializer = UserSerializer(users, many=True)
     return Response(serializer.data)
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -160,12 +168,14 @@ def view_all_reservations(request):
     serializer = ReservationSerializer(reservations, many=True)
     return Response(serializer.data)
 
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def all_parkinglot(request):
     parkinglot = ParkingLot.objects.all()
     serializer = ParkingLotSerializer(parkinglot, many=True)
     return Response(serializer.data)
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -174,12 +184,14 @@ def all_parkingSlot(request):
     serializer = ParkingSlotSerializer(parkingslot, many=True)
     return Response(serializer.data)
 
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def available_parkingSlot(request):
-    available_parkingslot = ParkingSlot.objects.filter(status='available')
+    available_parkingslot = ParkingSlot.objects.filter(status='open')
     serializer = ParkingSlotSerializer(available_parkingslot, many=True)
     return Response(serializer.data)
+
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -202,7 +214,7 @@ def reserve_parkingslot(request):
     except ParkingSlot.DoesNotExist:
         return Response({"error": "Parking slot not found."})
 
-    if slot.status != "available":
+    if slot.status != "open":
         return Response({"error": "This slot is not available."})
 
     overlapping = Reservation.objects.filter(
@@ -221,12 +233,21 @@ def reserve_parkingslot(request):
     if serializer.is_valid():
         reservation = serializer.save(user=user, amount=amount)
 
-        slot.status = "reserved"
+        slot.status = "held"
         slot.save()
 
         return Response(ReservationSerializer(reservation).data)
 
     return Response(serializer.errors)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def user_reservations(request):
+    user = request.user
+    reservations = Reservation.objects.filter(user=user).order_by('-id')
+    serializer = ReservationSerializer(reservations, many=True)
+    return Response(serializer.data, status=200)
 
 
 @api_view(['POST'])
@@ -250,13 +271,15 @@ def cancel_reservation(request):
     reservation.save()
 
     slot = reservation.slot
-    slot.status = 'available'
+    slot.status = 'open'
     slot.save()
 
     return Response({"success": f"Reservation {reservation_id} cancelled successfully."})
 
 
 razorpay_client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def pay_for_reservation(request):
@@ -292,6 +315,7 @@ def pay_for_reservation(request):
         "message": "Order created. Proceed with payment."
     })
 
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def verify_payment(request):
@@ -310,7 +334,6 @@ def verify_payment(request):
     except Reservation.DoesNotExist:
         return Response({"error": "Reservation not found"}, status=404)
 
-    # Verify Razorpay signature
     try:
         razorpay_client.utility.verify_payment_signature({
             "razorpay_order_id": razorpay_order_id,
@@ -322,13 +345,11 @@ def verify_payment(request):
         reservation.save()
         return Response({"error": "Payment verification failed"}, status=400)
 
-    # Payment success
     reservation.payment_status = "paid"
-    reservation.status = "active" 
+    reservation.status = "active"
     reservation.razorpay_payment_id = razorpay_payment_id
     reservation.razorpay_signature = razorpay_signature
     reservation.save()
-
 
     return Response({"success": "Payment verified successfully!"})
 
@@ -341,7 +362,6 @@ def reservation_qr_code(request, reservation_id):
     except Reservation.DoesNotExist:
         return Response({"error": "Reservation not found."}, status=404)
 
-    # Only generate QR after payment success
     if reservation.payment_status != "paid":
         return Response({"error": "QR Code available only after payment."}, status=403)
 
@@ -368,3 +388,25 @@ def reservation_qr_code(request, reservation_id):
     buffer.seek(0)
 
     return HttpResponse(buffer, content_type="image/png")
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def cancel_all_reservations(request):
+    if not is_admin(request.user):
+        return Response({"error": "Not authorized"}, status=403)
+
+    active_reservations = Reservation.objects.filter(status="active")
+
+    if not active_reservations.exists():
+        return Response({"message": "No active reservations found."})
+
+    for reservation in active_reservations:
+        reservation.status = "cancelled"
+        reservation.save()
+
+        slot = reservation.slot
+        slot.status = "open"
+        slot.save()
+
+    return Response({"success": f"Cancelled {active_reservations.count()} active reservations."})

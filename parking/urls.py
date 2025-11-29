@@ -18,6 +18,7 @@ urlpatterns = [
     path("api/parkingslot/update/<int:id>", views.update_parking_slot, name='update_parkingslot'),
 
     path("api/all_reservation", views.view_all_reservations, name='all_reservation'),
+    path("api/cancel_all_reservations", views.cancel_all_reservations, name='cancel_all_reservations'),
     path("api/all_users", views.view_all_users, name='all_users'),
 
     # user urls
@@ -25,6 +26,7 @@ urlpatterns = [
     path("api/all_parkingslot", views.all_parkingSlot, name='all_parkingslot'),
     path("api/available_parkingslot", views.available_parkingSlot, name='available_parkingslot'),
     path("api/reserve_parkingslot", views.reserve_parkingslot, name='reserve_parkingslot'),
+    path("api/user_reservation", views.user_reservations, name='user_reservation'),
     path("api/cancel_reservation", views.cancel_reservation, name='cancel_reservation'),
     path("api/reservation/<int:reservation_id>/qr/", views.reservation_qr_code, name="reservation_qr"),
     path('api/pay_reservation', views.pay_for_reservation, name='pay_for_reservation'),

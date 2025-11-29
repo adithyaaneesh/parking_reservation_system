@@ -31,15 +31,16 @@ class ParkingLot(models.Model):
 
 
 class ParkingSlot(models.Model):
-    STATUS_CHOICES = [
-        ('available', 'Available'),
-        ('reserved', 'Reserved'),
-        ('inactive', 'Inactive'),
+
+    PARKING_SLOT_STATUS = [
+        ('open', 'Open'),           
+        ('held', 'Held'),            
+        ('unavailable', 'Unavailable'), 
     ]
 
     lot = models.ForeignKey(ParkingLot, on_delete=models.CASCADE, related_name='slots')
     slot_number = models.PositiveIntegerField()
-    status = models.CharField(max_length=100, choices=STATUS_CHOICES, default='available')
+    status = models.CharField(max_length=100, choices=PARKING_SLOT_STATUS, default='open')
 
     class Meta:
         unique_together = ['lot', 'slot_number']

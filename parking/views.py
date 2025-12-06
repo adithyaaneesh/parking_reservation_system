@@ -279,7 +279,6 @@ def cancel_reservation(request):
 
 razorpay_client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
 
-
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def pay_for_reservation(request):
@@ -298,26 +297,35 @@ def pay_for_reservation(request):
 
     amount_in_paise = int(reservation.amount * 100)
 
-    razorpay_order = razorpay_client.order.create({
+    payment_link = razorpay_client.payment_link.create({
         "amount": amount_in_paise,
         "currency": "INR",
-        "payment_capture": "1"
+        "description": f"Payment for Reservation {reservation.id}",
+        "customer": {
+            "name": reservation.user.username,
+            "email": reservation.user.email
+        },
+        "notify": {
+            "sms": True,
+            "email": True
+        },
+        "callback_url": "http://127.0.0.1:8000/api/verify-payment"
     })
 
-    reservation.razorpay_order_id = razorpay_order['id']
+    reservation.razorpay_order_id = payment_link["id"]
     reservation.save()
 
     return Response({
         "reservation_id": reservation.id,
-        "razorpay_order_id": razorpay_order['id'],
-        "amount": reservation.amount,
-        "currency": "INR",
-        "message": "Order created. Proceed with payment."
+        "payment_link_id": payment_link["id"],
+        "payment_url": payment_link["short_url"],
+        "amount": reservation.amount
     })
 
 
+
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def verify_payment(request):
     razorpay_order_id = request.data.get("razorpay_order_id")
     razorpay_payment_id = request.data.get("razorpay_payment_id")
@@ -327,10 +335,7 @@ def verify_payment(request):
         return Response({"error": "Missing payment details"}, status=400)
 
     try:
-        reservation = Reservation.objects.get(
-            razorpay_order_id=razorpay_order_id,
-            user=request.user
-        )
+        reservation = Reservation.objects.get(razorpay_order_id=razorpay_order_id)
     except Reservation.DoesNotExist:
         return Response({"error": "Reservation not found"}, status=404)
 
@@ -362,32 +367,42 @@ def reservation_qr_code(request, reservation_id):
     except Reservation.DoesNotExist:
         return Response({"error": "Reservation not found."}, status=404)
 
-    if reservation.payment_status != "paid":
-        return Response({"error": "QR Code available only after payment."}, status=403)
+    # If no payment link created earlier → create it
+    if not reservation.razorpay_order_id:
+        amount_in_paise = int(reservation.amount * 100)
 
-    qr_data = f"Reservation ID: {reservation.id}\n" \
-              f"User: {reservation.user.username}\n" \
-              f"Slot: {reservation.slot.slot_number}\n" \
-              f"Start: {reservation.start_time}\n" \
-              f"End: {reservation.end_time}\n" \
-              f"Status: {reservation.status}\n" \
-              f"Payment: {reservation.payment_status}"
+        payment_link = razorpay_client.payment_link.create({
+            "amount": amount_in_paise,
+            "currency": "INR",
+            "description": f"Payment for Reservation {reservation.id}",
+            "customer": {
+                "name": reservation.user.username,
+                "email": reservation.user.email,
+            },
+            "notify": {
+                "sms": True,
+                "email": True
+            },
+            "callback_url": "http://127.0.0.1:8000/api/verify-payment"
+        })
 
-    qr = qrcode.QRCode(
-        version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_L,
-        box_size=10,
-        border=4,
-    )
-    qr.add_data(qr_data)
-    qr.make(fit=True)
 
-    img = qr.make_image(fill_color="black", back_color="white")
+        reservation.razorpay_order_id = payment_link["id"]
+        reservation.save()
+
+        payment_url = payment_link["short_url"]
+
+    else:
+        payment_link = razorpay_client.payment_link.fetch(reservation.razorpay_order_id)
+        payment_url = payment_link["short_url"]
+
+    # Generate proper payment QR
+    qr = qrcode.make(payment_url)
     buffer = io.BytesIO()
-    img.save(buffer, "PNG")
+    qr.save(buffer, format="PNG")
     buffer.seek(0)
 
-    return HttpResponse(buffer, content_type="image/png")
+    return HttpResponse(buffer.getvalue(), content_type="image/png")
 
 
 @api_view(['POST'])

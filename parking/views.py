@@ -249,7 +249,6 @@ def user_reservations(request):
     serializer = ReservationSerializer(reservations, many=True)
     return Response(serializer.data, status=200)
 
-
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def cancel_reservation(request):
@@ -267,14 +266,17 @@ def cancel_reservation(request):
     if reservation.status != "active":
         return Response({"error": "Only active reservations can be cancelled."})
 
+    # Update reservation
     reservation.status = "cancelled"
     reservation.save()
 
+    # 🔥 Release parking slot
     slot = reservation.slot
-    slot.status = 'open'
+    slot.status = "open"
     slot.save()
 
     return Response({"success": f"Reservation {reservation_id} cancelled successfully."})
+
 
 
 razorpay_client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
@@ -339,22 +341,35 @@ def verify_payment(request):
     except Reservation.DoesNotExist:
         return Response({"error": "Reservation not found"}, status=404)
 
+    slot = reservation.slot  # Slot reference for both success/failure
+
+    # ---- VERIFY PAYMENT ----
     try:
         razorpay_client.utility.verify_payment_signature({
             "razorpay_order_id": razorpay_order_id,
             "razorpay_payment_id": razorpay_payment_id,
             "razorpay_signature": razorpay_signature
         })
-    except:
+    except Exception:
+        # ❌ Payment failed → release the held slot
         reservation.payment_status = "failed"
         reservation.save()
+
+        slot.status = "open"
+        slot.save()
+
         return Response({"error": "Payment verification failed"}, status=400)
 
+    # ---- PAYMENT SUCCESS ----
     reservation.payment_status = "paid"
     reservation.status = "active"
     reservation.razorpay_payment_id = razorpay_payment_id
     reservation.razorpay_signature = razorpay_signature
     reservation.save()
+
+    # 🔥 Mark slot as fully reserved (closed)
+    slot.status = "closed"
+    slot.save()
 
     return Response({"success": "Payment verified successfully!"})
 
@@ -404,7 +419,6 @@ def reservation_qr_code(request, reservation_id):
 
     return HttpResponse(buffer.getvalue(), content_type="image/png")
 
-
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def cancel_all_reservations(request):
@@ -425,3 +439,6 @@ def cancel_all_reservations(request):
         slot.save()
 
     return Response({"success": f"Cancelled {active_reservations.count()} active reservations."})
+
+
+
